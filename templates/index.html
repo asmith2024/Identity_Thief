@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Identity Thief – JSON Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #181825;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #313244;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      color: #cba6f7;
+      letter-spacing: 0.05em;
+    }
+
+    #counter {
+      font-size: 0.95rem;
+      color: #a6adc8;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: stretch;
+      padding: 1.5rem;
+      gap: 1rem;
+    }
+
+    .nav-btn {
+      background: #313244;
+      border: none;
+      color: #cdd6f4;
+      font-size: 2.5rem;
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 0 1.2rem;
+      transition: background 0.2s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-btn:hover:not(:disabled) { background: #45475a; }
+    .nav-btn:disabled { color: #45475a; cursor: default; }
+
+    #json-container {
+      flex: 1;
+      background: #181825;
+      border-radius: 10px;
+      border: 1px solid #313244;
+      padding: 1.5rem;
+      overflow: auto;
+    }
+
+    #json-display {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    #empty-msg {
+      color: #6c7086;
+      font-style: italic;
+      text-align: center;
+      margin-top: 3rem;
+      font-size: 1.1rem;
+    }
+
+    footer {
+      padding: 1rem 2rem;
+      background: #181825;
+      border-top: 2px solid #313244;
+      display: flex;
+      justify-content: center;
+    }
+
+    #purge-btn {
+      background: #f38ba8;
+      color: #1e1e2e;
+      border: none;
+      padding: 0.6rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #purge-btn:hover { background: #eba0ac; }
+
+    /* JSON syntax highlighting */
+    .json-key    { color: #89b4fa; }
+    .json-string { color: #a6e3a1; }
+    .json-number { color: #fab387; }
+    .json-bool   { color: #f38ba8; }
+    .json-null   { color: #6c7086; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🕵️ Identity Thief – JSON Viewer</h1>
+  <span id="counter">No payloads</span>
+</header>
+
+<main>
+  <button class="nav-btn" id="prev-btn" title="Previous" disabled>&#8592;</button>
+
+  <div id="json-container">
+    <div id="empty-msg">No payloads stored yet.<br/>Send a POST request to <code>/api/payload</code> to get started.</div>
+    <pre id="json-display" style="display:none;"></pre>
+  </div>
+
+  <button class="nav-btn" id="next-btn" title="Next" disabled>&#8594;</button>
+</main>
+
+<footer>
+  <button id="purge-btn">🗑 Purge All Payloads</button>
+</footer>
+
+<script>
+  let payloads = [];
+  let currentIndex = 0;
+
+  const jsonDisplay = document.getElementById("json-display");
+  const emptyMsg    = document.getElementById("empty-msg");
+  const counter     = document.getElementById("counter");
+  const prevBtn     = document.getElementById("prev-btn");
+  const nextBtn     = document.getElementById("next-btn");
+  const purgeBtn    = document.getElementById("purge-btn");
+
+  function syntaxHighlight(json) {
+    json = json.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return json.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      function (match) {
+        let cls = "json-number";
+        if (/^"/.test(match)) {
+          cls = /:$/.test(match) ? "json-key" : "json-string";
+        } else if (/true|false/.test(match)) {
+          cls = "json-bool";
+        } else if (/null/.test(match)) {
+          cls = "json-null";
+        }
+        return '<span class="' + cls + '">' + match + "</span>";
+      }
+    );
+  }
+
+  function render() {
+    if (payloads.length === 0) {
+      emptyMsg.style.display = "block";
+      jsonDisplay.style.display = "none";
+      counter.textContent = "No payloads";
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      return;
+    }
+
+    emptyMsg.style.display = "none";
+    jsonDisplay.style.display = "block";
+
+    const pretty = JSON.stringify(payloads[currentIndex].payload, null, 2);
+    jsonDisplay.innerHTML = syntaxHighlight(pretty);
+    counter.textContent = (currentIndex + 1) + " / " + payloads.length;
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex === payloads.length - 1;
+  }
+
+  async function loadPayloads() {
+    const res = await fetch("/api/payloads");
+    payloads = await res.json();
+    if (currentIndex >= payloads.length) {
+      currentIndex = Math.max(0, payloads.length - 1);
+    }
+    render();
+  }
+
+  prevBtn.addEventListener("click", () => {
+    if (currentIndex > 0) { currentIndex--; render(); }
+  });
+
+  nextBtn.addEventListener("click", () => {
+    if (currentIndex < payloads.length - 1) { currentIndex++; render(); }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft")  prevBtn.click();
+    if (e.key === "ArrowRight") nextBtn.click();
+  });
+
+  purgeBtn.addEventListener("click", async () => {
+    if (!confirm("Purge all stored payloads? This cannot be undone.")) return;
+    await fetch("/api/purge", { method: "DELETE" });
+    payloads = [];
+    currentIndex = 0;
+    render();
+  });
+
+  loadPayloads();
+</script>
+</body>
+</html>
