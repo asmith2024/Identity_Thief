@@ -2,8 +2,10 @@ import os
 
 from flask import Flask, request, jsonify, render_template, abort
 from tinydb import TinyDB
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 db = TinyDB("payloads.json")
 
 
@@ -38,4 +40,5 @@ def purge_payloads():
 
 if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    app.run(debug=debug)
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=debug)

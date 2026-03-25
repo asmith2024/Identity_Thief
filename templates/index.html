@@ -127,7 +127,7 @@
   <button class="nav-btn" id="prev-btn" title="Previous" disabled>&#8592;</button>
 
   <div id="json-container">
-    <div id="empty-msg">No payloads stored yet.<br/>Send a POST request to <code>/api/payload</code> to get started.</div>
+    <div id="empty-msg">No payloads stored yet.<br/>Send a POST request to <code>{{ url_for('receive_payload') }}</code> to get started.</div>
     <pre id="json-display" style="display:none;"></pre>
   </div>
 
@@ -188,7 +188,7 @@
   }
 
   async function loadPayloads() {
-    const res = await fetch("/api/payloads");
+    const res = await fetch("{{ url_for('list_payloads') }}");
     payloads = await res.json();
     if (currentIndex >= payloads.length) {
       currentIndex = Math.max(0, payloads.length - 1);
@@ -211,7 +211,7 @@
 
   purgeBtn.addEventListener("click", async () => {
     if (!confirm("Purge all stored payloads? This cannot be undone.")) return;
-    await fetch("/api/purge", { method: "DELETE" });
+    await fetch("{{ url_for('purge_payloads') }}", { method: "DELETE" });
     payloads = [];
     currentIndex = 0;
     render();
